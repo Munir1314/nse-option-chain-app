@@ -1,35 +1,71 @@
-def fetch_option_chain(symbol="NIFTY"):
-    import time
-    import random
+import streamlit as st
+import pandas as pd
+import requests
+import time
 
+st.set_page_config(page_title="Live Option Chain", layout="wide")
+st.title("📈 Live NSE Option Chain Viewer")
+
+# Dropdown to select index
+symbol = st.selectbox("Select Index", ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"])
+
+# Fetch function with correct headers
+def fetch_option_chain(symbol):
+    url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Accept-Encoding": "gzip, deflate, br",
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.nseindia.com/",
-        "Connection": "keep-alive",
+        "Accept": "application/json",
+        "Referer": f"https://www.nseindia.com/get-quotes/derivatives?symbol={symbol}",
     }
 
     session = requests.Session()
-    try:
-        # Establish session and cookies
-        session.get("https://www.nseindia.com", headers=headers, timeout=5)
-        url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
-        response = session.get(url, headers=headers, timeout=5)
+    session.get("https://www.nseindia.com", headers=headers)
+    time.sleep(1)  # Pause for 1 sec (important)
+    response = session.get(url, headers=headers)
+    
+    data = response.json()
+    all_data = data['records']['data']
+    ce_list = []
+    pe_list = []
 
-        if response.status_code != 200:
-            st.warning("NSE temporarily blocked us. Trying again in a few seconds...")
-            time.sleep(random.uniform(1, 3))
-            response = session.get(url, headers=headers, timeout=5)
+    for record in all_data:
+        ce = record.get('CE')
+        pe = record.get('PE')
 
-        if response.status_code != 200:
-            raise Exception("Failed to fetch data from NSE")
+        if ce:
+            ce_list.append({
+                "Strike": ce['strikePrice'],
+                "Expiry": ce['expiryDate'],
+                "OI": ce['openInterest'],
+                "COI": ce['changeinOpenInterest'],
+                "Vol": ce['totalTradedVolume'],
+                "IV": ce['impliedVolatility'],
+                "LTP": ce['lastPrice'],
+                "Type": "CE"
+            })
 
-        data = response.json()
-        expiry_list = data["records"]["expiryDates"]
-        all_data = data["records"]["data"]
-        df = pd.json_normalize(all_data, sep='_')
-        return df, expiry_list
-    except Exception as e:
-        st.error("Failed to fetch data from NSE.")
-        return pd.DataFrame(), []
+        if pe:
+            pe_list.append({
+                "Strike": pe['strikePrice'],
+                "Expiry": pe['expiryDate'],
+                "OI": pe['openInterest'],
+                "COI": pe['changeinOpenInterest'],
+                "Vol": pe['totalTradedVolume'],
+                "IV": pe['impliedVolatility'],
+                "LTP": pe['lastPrice'],
+                "Type": "PE"
+            })
+
+    df = pd.DataFrame(ce_list + pe_list)
+    return df
+
+# Load and display
+st.write("Fetching live data...")
+try:
+    df = fetch_option_chain(symbol)
+    df_sorted = df.sort_values(by=["Strike", "Type"])
+    st.dataframe(df_sorted)
+except:
+    st.error("⚠️ Unable to load data. Please refresh the app.")
