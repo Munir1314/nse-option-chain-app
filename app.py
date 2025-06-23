@@ -3,69 +3,69 @@ import pandas as pd
 import requests
 import time
 
-st.set_page_config(page_title="Live Option Chain", layout="wide")
+st.set_page_config(page_title="Live NSE Option Chain", layout="wide")
 st.title("📈 Live NSE Option Chain Viewer")
 
-# Dropdown to select index
 symbol = st.selectbox("Select Index", ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"])
 
-# Fetch function with correct headers
 def fetch_option_chain(symbol):
-    url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "application/json",
-        "Referer": f"https://www.nseindia.com/get-quotes/derivatives?symbol={symbol}",
-    }
+    try:
+        url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "application/json",
+            "Referer": f"https://www.nseindia.com/get-quotes/derivatives?symbol={symbol}"
+        }
 
-    session = requests.Session()
-    session.get("https://www.nseindia.com", headers=headers)
-    time.sleep(1)  # Pause for 1 sec (important)
-    response = session.get(url, headers=headers)
-    
-    data = response.json()
-    all_data = data['records']['data']
-    ce_list = []
-    pe_list = []
+        session = requests.Session()
+        session.get("https://www.nseindia.com", headers=headers, timeout=5)
+        time.sleep(1)
+        response = session.get(url, headers=headers, timeout=5)
+        data = response.json()
 
-    for record in all_data:
-        ce = record.get('CE')
-        pe = record.get('PE')
+        ce_list = []
+        pe_list = []
 
-        if ce:
-            ce_list.append({
-                "Strike": ce['strikePrice'],
-                "Expiry": ce['expiryDate'],
-                "OI": ce['openInterest'],
-                "COI": ce['changeinOpenInterest'],
-                "Vol": ce['totalTradedVolume'],
-                "IV": ce['impliedVolatility'],
-                "LTP": ce['lastPrice'],
-                "Type": "CE"
-            })
+        for record in data["records"]["data"]:
+            ce = record.get("CE")
+            pe = record.get("PE")
 
-        if pe:
-            pe_list.append({
-                "Strike": pe['strikePrice'],
-                "Expiry": pe['expiryDate'],
-                "OI": pe['openInterest'],
-                "COI": pe['changeinOpenInterest'],
-                "Vol": pe['totalTradedVolume'],
-                "IV": pe['impliedVolatility'],
-                "LTP": pe['lastPrice'],
-                "Type": "PE"
-            })
+            if ce:
+                ce_list.append({
+                    "Strike": ce["strikePrice"],
+                    "Expiry": ce["expiryDate"],
+                    "OI": ce["openInterest"],
+                    "COI": ce["changeinOpenInterest"],
+                    "Vol": ce["totalTradedVolume"],
+                    "IV": ce["impliedVolatility"],
+                    "LTP": ce["lastPrice"],
+                    "Type": "CE"
+                })
 
-    df = pd.DataFrame(ce_list + pe_list)
-    return df
+            if pe:
+                pe_list.append({
+                    "Strike": pe["strikePrice"],
+                    "Expiry": pe["expiryDate"],
+                    "OI": pe["openInterest"],
+                    "COI": pe["changeinOpenInterest"],
+                    "Vol": pe["totalTradedVolume"],
+                    "IV": pe["impliedVolatility"],
+                    "LTP": pe["lastPrice"],
+                    "Type": "PE"
+                })
 
-# Load and display
+        df = pd.DataFrame(ce_list + pe_list)
+        return df
+
+    except Exception as e:
+        st.error("❌ Could not load live data from NSE.")
+        st.stop()
+
+# Show Data
 st.write("Fetching live data...")
-try:
-    df = fetch_option_chain(symbol)
-    df_sorted = df.sort_values(by=["Strike", "Type"])
-    st.dataframe(df_sorted)
-except:
-    st.error("⚠️ Unable to load data. Please refresh the app.")
+
+df = fetch_option_chain(symbol)
+df = df.sort_values(by=["Strike", "Type"])
+st.dataframe(df, use_container_width=True)
